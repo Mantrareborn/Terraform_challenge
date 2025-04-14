@@ -54,7 +54,7 @@ jobs:
             -backend-config="key=$TF_BACKEND_KEY"
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan
+        run: terraform plan -var-file="terraform.tfvars" -out=tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
