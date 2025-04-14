@@ -1,45 +1,61 @@
-name: Deploy Environments
+name: Terraform Deploy
 
 on:
   push:
-    branches:
-      - main
     paths:
       - 'environments/dev/**'
-      - 'modules/**'
-      - '.github/workflows/pipeline.yml'
+    branches:
+      - main
 
 jobs:
-  deploy:
-    name: Deploy with Terraform
+  terraform:
     runs-on: ubuntu-latest
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      TF_BACKEND_RG: rg-info-1758_ai
+      TF_BACKEND_STORAGE: staistudiohu217832852473
+      TF_BACKEND_CONTAINER: tfstate-terraform
+      TF_BACKEND_KEY: tst.terraform.tfstate
 
     defaults:
       run:
+        shell: bash
         working-directory: environments/dev
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.4.6
+      - name: Install Terraform
+        run: |
+          sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install terraform -y
+          terraform --version
+
+      - name: Azure Login via Service Principal
+        run: |
+          az login --service-principal \
+            --username "$ARM_CLIENT_ID" \
+            --password "$ARM_CLIENT_SECRET" \
+            --tenant "$ARM_TENANT_ID"
 
       - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Validate
-        run: terraform validate
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TF_BACKEND_RG" \
+            -backend-config="storage_account_name=$TF_BACKEND_STORAGE" \
+            -backend-config="container_name=$TF_BACKEND_CONTAINER" \
+            -backend-config="key=$TF_BACKEND_KEY"
 
       - name: Terraform Plan
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
