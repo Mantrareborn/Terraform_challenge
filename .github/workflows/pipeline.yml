@@ -3,7 +3,8 @@ name: Terraform Deploy
 on:
   push:
     paths:
-      - 'environments/**'  # Detect changes in both dev and prod
+      - 'environments/dev/**'
+      - 'environments/prod/**'  # Add prod folder path for changes in prod
     branches:
       - main
 
@@ -50,21 +51,21 @@ jobs:
 
       - name: Terraform Plan
         run: |
-          # Set working directory dynamically based on the path that triggered the pipeline
-          if [[ "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
-            cd environments/dev
-          elif [[ "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
-            cd environments/prod
+          # Check the folder being changed (dev or prod)
+          if [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
+            echo "Running plan for dev environment"
+            terraform plan -var-file="environments/dev/terraform.tfvars" -out=tfplan
+          elif [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
+            echo "Running plan for prod environment"
+            terraform plan -var-file="environments/prod/terraform.tfvars" -out=tfplan
           fi
-          terraform plan -var-file="terraform.tfvars" -out=tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
         run: |
-          # Apply the plan
-          if [[ "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
-            cd environments/dev
-          elif [[ "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
-            cd environments/prod
+          # Apply the plan based on environment
+          if [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
+            terraform apply -auto-approve tfplan
+          elif [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
+            terraform apply -auto-approve tfplan
           fi
-          terraform apply -auto-approve tfplan
