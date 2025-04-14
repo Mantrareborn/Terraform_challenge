@@ -2,6 +2,16 @@ provider "azurerm" {
   features {}
 }
 
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "rg-info-1758_ai"
+    storage_account_name = "staistudiohu217832852473"
+    container_name       = "tfstate-terraform"
+    key                  = "dev.terraform.tfstate"
+  }
+}
+
+
 resource "azurerm_resource_group" "rg" {
   name     = "rg-${var.environment}-${var.location}"
   location = var.location
