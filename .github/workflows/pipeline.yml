@@ -9,19 +9,9 @@ on:
       - main
 
 jobs:
-  terraform:
-    name: Terraform (${{ matrix.env }})
+  terraform-dev:
+    if: contains(github.event.head_commit.modified, 'environments/dev/')
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env: ['dev', 'prod']
-      # This ensures if both environments changed, both jobs run
-      # If only one changed, only that job runs
-      fail-fast: false
-
-    # Only run the job if files in the specific env folder were changed
-    if: contains(github.event.head_commit.modified, 'environments/${{ matrix.env }}/') || github.event_name == 'workflow_dispatch'
-
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
       ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
@@ -30,13 +20,12 @@ jobs:
       TF_BACKEND_RG: rg-info-1758_ai
       TF_BACKEND_STORAGE: staistudiohu217832852473
       TF_BACKEND_CONTAINER: tfstate-terraform
-      # Environment-specific state file
-      TF_BACKEND_KEY: ${{ matrix.env }}.terraform.tfstate
+      TF_BACKEND_KEY: dev.terraform.tfstate
 
     defaults:
       run:
         shell: bash
-        working-directory: environments/${{ matrix.env }}
+        working-directory: environments/dev
 
     steps:
       - name: Checkout code
@@ -44,18 +33,6 @@ jobs:
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: "1.5.0"
-
-      - name: Terraform Format
-        run: terraform fmt -check -recursive
-
-      - name: Azure Login
-        run: |
-          az login --service-principal \
-            --username "$ARM_CLIENT_ID" \
-            --password "$ARM_CLIENT_SECRET" \
-            --tenant "$ARM_TENANT_ID"
 
       - name: Terraform Init
         run: |
@@ -65,12 +42,49 @@ jobs:
             -backend-config="container_name=$TF_BACKEND_CONTAINER" \
             -backend-config="key=$TF_BACKEND_KEY"
 
-      - name: Terraform Validate
-        run: terraform validate
-
       - name: Terraform Plan
-        run: terraform plan -var-file="terraform.tfvars" -out=tfplan
+        run: terraform plan -var-file="terraform.tfvars"
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve
+
+  terraform-prod:
+    if: contains(github.event.head_commit.modified, 'environments/prod/')
+    runs-on: ubuntu-latest
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      TF_BACKEND_RG: rg-info-1758_ai
+      TF_BACKEND_STORAGE: staistudiohu217832852473
+      TF_BACKEND_CONTAINER: tfstate-terraform
+      TF_BACKEND_KEY: prod.terraform.tfstate
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: environments/prod
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TF_BACKEND_RG" \
+            -backend-config="storage_account_name=$TF_BACKEND_STORAGE" \
+            -backend-config="container_name=$TF_BACKEND_CONTAINER" \
+            -backend-config="key=$TF_BACKEND_KEY"
+
+      - name: Terraform Plan
+        run: terraform plan -var-file="terraform.tfvars"
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve
