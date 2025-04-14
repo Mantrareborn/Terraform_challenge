@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'environments/**'
+      - 'environments/dev/**'
       - 'modules/**'
       - '.github/workflows/deploy.yml'
 
