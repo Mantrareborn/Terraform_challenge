@@ -14,15 +14,9 @@ jobs:
     name: Deploy with Terraform
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        env:
-          - dev
-          - prod  # Add more as needed
-
     defaults:
       run:
-        working-directory: environments/${{ matrix.env }}
+        working-directory: environments/dev
 
     steps:
       - name: Checkout code
