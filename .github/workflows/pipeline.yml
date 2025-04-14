@@ -7,7 +7,7 @@ on:
     paths:
       - 'environments/dev/**'
       - 'modules/**'
-      - '.github/workflows/deploy.yml'
+      - '.github/workflows/pipeline.yml'
 
 jobs:
   deploy:
