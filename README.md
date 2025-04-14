@@ -1,1 +1,2 @@
-# Terraform_challenge
+# Introduction 
+This repository contains Terraform code to deploy Azure Virtual Networks (VNETs) across multiple environments. The solution demonstrates infrastructure-as-code principles with a focus on simplicity and reusability.
