@@ -29,4 +29,3 @@ module "vnet" {
   subnet_address_prefixes   = var.subnet_address_prefixes
   tags                      = var.tags
 }
-
