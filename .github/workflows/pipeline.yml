@@ -3,7 +3,7 @@ name: Terraform Deploy
 on:
   push:
     paths:
-      - 'environments/dev/**'
+      - 'environments/**'  # Detect changes in both dev and prod
     branches:
       - main
 
@@ -20,11 +20,6 @@ jobs:
       TF_BACKEND_STORAGE: staistudiohu217832852473
       TF_BACKEND_CONTAINER: tfstate-terraform
       TF_BACKEND_KEY: tst.terraform.tfstate
-
-    defaults:
-      run:
-        shell: bash
-        working-directory: environments/dev
 
     steps:
       - name: Checkout code
@@ -54,8 +49,22 @@ jobs:
             -backend-config="key=$TF_BACKEND_KEY"
 
       - name: Terraform Plan
-        run: terraform plan -var-file="terraform.tfvars" -out=tfplan
+        run: |
+          # Set working directory dynamically based on the path that triggered the pipeline
+          if [[ "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
+            cd environments/dev
+          elif [[ "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
+            cd environments/prod
+          fi
+          terraform plan -var-file="terraform.tfvars" -out=tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve tfplan
+        run: |
+          # Apply the plan
+          if [[ "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
+            cd environments/dev
+          elif [[ "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
+            cd environments/prod
+          fi
+          terraform apply -auto-approve tfplan
