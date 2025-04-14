@@ -4,13 +4,23 @@ on:
   push:
     paths:
       - 'environments/dev/**'
-      - 'environments/prod/**'  # Add prod folder path for changes in prod
+      - 'environments/prod/**'
     branches:
       - main
 
 jobs:
   terraform:
+    name: Terraform (${{ matrix.env }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: ['dev', 'prod']
+      # This ensures if both environments changed, both jobs run
+      # If only one changed, only that job runs
+      fail-fast: false
+
+    # Only run the job if files in the specific env folder were changed
+    if: contains(github.event.head_commit.modified, 'environments/${{ matrix.env }}/') || github.event_name == 'workflow_dispatch'
 
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -20,21 +30,27 @@ jobs:
       TF_BACKEND_RG: rg-info-1758_ai
       TF_BACKEND_STORAGE: staistudiohu217832852473
       TF_BACKEND_CONTAINER: tfstate-terraform
-      TF_BACKEND_KEY: tst.terraform.tfstate
+      # Environment-specific state file
+      TF_BACKEND_KEY: ${{ matrix.env }}.terraform.tfstate
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: environments/${{ matrix.env }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Install Terraform
-        run: |
-          sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
-          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform -y
-          terraform --version
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.5.0"
 
-      - name: Azure Login via Service Principal
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Azure Login
         run: |
           az login --service-principal \
             --username "$ARM_CLIENT_ID" \
@@ -49,23 +65,12 @@ jobs:
             -backend-config="container_name=$TF_BACKEND_CONTAINER" \
             -backend-config="key=$TF_BACKEND_KEY"
 
+      - name: Terraform Validate
+        run: terraform validate
+
       - name: Terraform Plan
-        run: |
-          # Check the folder being changed (dev or prod)
-          if [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
-            echo "Running plan for dev environment"
-            terraform plan -var-file="environments/dev/terraform.tfvars" -out=tfplan
-          elif [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
-            echo "Running plan for prod environment"
-            terraform plan -var-file="environments/prod/terraform.tfvars" -out=tfplan
-          fi
+        run: terraform plan -var-file="terraform.tfvars" -out=tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: |
-          # Apply the plan based on environment
-          if [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/dev" ]]; then
-            terraform apply -auto-approve tfplan
-          elif [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_PATH" =~ "environments/prod" ]]; then
-            terraform apply -auto-approve tfplan
-          fi
+        run: terraform apply -auto-approve tfplan
